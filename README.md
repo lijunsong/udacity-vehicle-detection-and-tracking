@@ -51,7 +51,12 @@ To find which color space to apply HOG, I use `get_hog_features` function to ret
 
 ![color space explore][image2]
 
-HOG parameters are also tuned during sliding window search.
+HOG parameters are mostly tuned during sliding window search. I used these parameters
+
+ - orient: 32, because my laptop can't handle large feature vectors, also see Discussion
+ - pixels_per_cell: 16, testing shows 16 better than 8
+ - cells_per_block: 2
+
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
@@ -61,7 +66,7 @@ I used HOG features and spatial binning features to train my model. The training
 
 `Model.preprocess` will return a vector containing HOG and spatial features (features are simply concatenated).
 
-`Model.train` will preprocess images and normalize feature vectors to make them zero mean and unit deviation. Then features and labels will be shuffled to remove order effect of the training data. Finally 30% training data will be reserved for evaluation before training.
+`Model.train` will preprocess images and normalize feature vectors to make them zero mean and unit variance. Then features and labels will be shuffled to remove order effect of the training data. Finally 30% training data will be reserved for evaluation before training.
 
 ### Sliding Window Search
 
@@ -77,7 +82,7 @@ The sub-sampling technique doesn't enlarge the window size, instead it scales th
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-I searched on only two scales using YCrCb 3-channel HOG features in the feature vector, which provided decent result.  Here are some images showing scanning process:
+I used two scales scanning on YCrCb 3-channel HOG features in the feature vector, which provided decent result.  Here are some images showing scanning process:
 
 Scanning from y 370 to 500 with scaling factor 1
 
@@ -93,6 +98,7 @@ Eventually, calling `annotate_cars_in_image(test_image)` will produce an image w
 
 ![result][pipeline_result]
 
+I tested different feature vectors and decided to drop the color histogram features to increase training speed. Using only HOG actually has bad performance in my experiement, so I added spatial binning features with reduced the size 16x16x3.
 
 ---
 
@@ -122,6 +128,10 @@ Here is an example of annotated image and its corresponding **accumulated** `hea
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-I encountered a problem where the feature vector size was too large to train. That feature vector contained HOG features, spatial bins of (32, 32) size and color maps, length around 20k in total. I then reduced HOG size by increasing the orient parameter, remove color histograms, and reduce spatial bins size to (16,16). It can produce decent result, but color information is still useful and the model can be improved on that.
+I encountered a problem where the feature vector size was too large to fit into memory, and took forever to train. That feature vector contained HOG features, spatial bins of (32, 32) size and color maps, length around 20k in total. I then reduced HOG size by increasing the orient parameter, remove color histograms, and reduce spatial bins size to (16,16). With these improvement, it can produce decent result. (I can also use generator to solve memory issue, but the slowness is still a problem.)
 
-The scaling factor in sliding window search is tricky. Even if the model has 98% accuracy, if the scaling factor increase to 3, or decrease to 1.5, the model is going to have a lot of false positives. To solve this problem, I need explore more to get a better model and data.
+The scaling factor in sliding window search is tricky. Even if the model has 98% accuracy, if the scaling factor increase to 3, or decrease to 1.5, the model is going to have a lot of false positives. To solve this problem, I need explore more to get a better model and data. I believe the 98% accuracy on test set is overfitting because we have similar images in the given data.
+
+I noticed that current reconstruction of boxes will combine two cars nearby. Current algorithm will definitely fail in this situation. One way to solve this problem is to filter out more unqualified heatmap to produce tighter boxes, or probably introduce prediction confidence level to increment heatmap map (instead of +1)
+
+Another situation this algorithm will fail is when the car is in bit slop where the start and end position (y-axis) of sliding window is not tuned for these situations.
