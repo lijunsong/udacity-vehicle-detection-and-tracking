@@ -5,8 +5,15 @@ import numpy as np
 import cv2
 from skimage.feature import hog
 
+
+orient = 32
+pix_per_cell = 16
+cell_per_block = 2
+hist_bins = 32
+spatial_size = (16,16)
+
 # Define a function to compute binned color features
-def bin_spatial(img, size=(32, 32)):
+def bin_spatial(img, size=(16, 16)):
     features = cv2.resize(img, size).ravel()
     # Return the feature vector
     return features
@@ -23,11 +30,6 @@ def color_hist(img, nbins=32):
     hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
-
-orient = 32
-pix_per_cell = 8
-cell_per_block = 2
-hist_bins = 32
 
 # Define a function to return HOG features and visualization
 def get_hog_features(img, orient=orient,
@@ -74,7 +76,7 @@ def convert_color(image, color_space='RGB'):
 # parameter
 count = 0
 def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
-              spatial_size, show_all=False):
+              show_all=False):
 
     #draw_img = np.copy(img)
     img = img.astype(np.float32)/255
@@ -96,7 +98,7 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
     # 64 was the orginal sampling rate, with 8 cells and 8 pix per cell
     window = 64
     nblocks_per_window = (window // pix_per_cell)-1
-    cells_per_step = 2  # Instead of overlap, define how many cells to step
+    cells_per_step = 1  # Instead of overlap, define how many cells to step
     nxsteps = (nxblocks - nblocks_per_window) // cells_per_step
     nysteps = (nyblocks - nblocks_per_window) // cells_per_step
 
@@ -129,12 +131,10 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
 
             # Get color features
             spatial_features = bin_spatial(subimg, size=spatial_size)
-            hist_features = color_hist(subimg, nbins=hist_bins)
+            #hist_features = color_hist(subimg, nbins=hist_bins)
 
             # Scale features and make a prediction
-            #print(spatial_features.shape)
-            #print(X_scaler.transform(hist_features.reshape(1,-1)))
-            test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
+            test_features = X_scaler.transform(np.hstack((spatial_features, hog_features)).reshape(1, -1))
             test_prediction = model.predict(test_features)
 
             if test_prediction == 1 or show_all:
@@ -151,7 +151,7 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
 
 # extract features from one image
 # Have this function call bin_spatial() and color_hist()
-def extract_features(image, color_space='RGB', spatial_size=(32, 32),
+def extract_features(image, color_space='RGB', spatial_size=spatial_size,
                      hog_channel='ALL'):
 
     file_features = []
@@ -161,10 +161,9 @@ def extract_features(image, color_space='RGB', spatial_size=(32, 32),
     file_features.append(spatial_features)
 
     # Apply color_hist()
-    hist_features = color_hist(feature_image, nbins=hist_bins)
-    file_features.append(hist_features)
+    #hist_features = color_hist(feature_image, nbins=hist_bins)
+    #file_features.append(hist_features)
 
-    # Call get_hog_features() with vis=False, feature_vec=True
     if hog_channel == 'ALL':
         hog_features = []
         for channel in range(feature_image.shape[2]):

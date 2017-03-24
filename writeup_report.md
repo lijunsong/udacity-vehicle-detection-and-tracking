@@ -15,9 +15,8 @@ The goals / steps of this project are the following:
 [image3]: ./writeup-images/scale15.png
 [image4]: ./writeup-images/scale2.png
 [image5]: ./writeup-images/scale25.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
+[heatmap1]: ./writeup-images/hotimage-0.jpg
+[heatmap_image1]: ./writeup-images/hotimagehot-0.jpg
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/513/view) Points
 ### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.  
@@ -43,12 +42,12 @@ Training images are loaded in class `CarImages`. Here is an example of vehicle a
 ![vehicle and non-vehicle][image1]
 
 
-The training is done in `Model` class where HOG feature extraction is done in `preprocess` method. `preprocess` is called from `train` method to extract features from a training image. The actual extraction is done using `skimage.feature.hog`, which takes an image with various parameters and returns the HOG feature vector of the image.
+The training is done in `Model` class. HOG feature extraction is done in `preprocess` method. `preprocess` is called from `train` method to extract features from a training image. The actual extraction is done using `skimage.feature.hog`, which takes an image with various parameters and returns the HOG feature vector of the image.
 
 
 #### 2. Explain how you settled on your final choice of HOG parameters.
 
-To find which color space to apply HOG, I have the `hog` function to return a featured image to feel how recognizable the feature is. Take the following images as example, where we can see that HSV color space has richer HOG features compared with RGB.
+To find which color space to apply HOG, I use `get_hog_features` function to return an image equivalent to extracted features, and eyeball how recognizable the image is. Take the following images as example, where we can see that HSV color space has richer HOG features compared with RGB.
 
 ![color space explore][image2]
 
@@ -56,9 +55,11 @@ HOG parameters are also tuned during sliding window search.
 
 #### 3. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-I used a combination of HOG features, color features and spatial features. The training is done in `Model` class.
+I used HOG features and spatial binning features to train my model. The training is done in `Model` class.
 
-`Model.preprocess` will return a vector containing HOG, color and spatial features (features are simply concatenated).
+(I used to use a combination of HOG features, color features and spatial features, but those seem only adding more complexity in the code without increasing prediction rate.)
+
+`Model.preprocess` will return a vector containing HOG and spatial features (features are simply concatenated).
 
 `Model.train` will preprocess images and normalize feature vectors to make them zero mean and unit deviation. Then features and labels will be shuffled to remove order effect of the training data. Finally 30% training data will be reserved for evaluation before training.
 
@@ -66,58 +67,62 @@ I used a combination of HOG features, color features and spatial features. The t
 
 #### 1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
 
-I started with the `slide_window` function (see `utils.py`). This function generates a list of windows to search. Previously for each window, I extracted features (HOG, spatial and color) and had the model to make the prediction. Object in different positions will have different size because the further the distance, the smaller the object. The main benefit is that this function fits nicely with previous code. The main drawback was the slow speed because it has to calculate the HOG feature for each window.
+I started with the `slide_window` function (see `utils.py`). This function generates a list of windows to search. Previously, for each window, I extracted features and had the model to make the prediction. Object in different positions will have different size because the further the distance, the smaller the object. The main benefit is that this function fits nicely with previous code. The main drawback was the slow speed because it has to calculate the HOG feature for each window.
 
 Then I adapted the sub-sampling techniques. Windows are generated based on cells and blocks in HOG features. For each image, the technique calculates HOG features only once.
 
-Since windows are generated based on cells and blocks, windows will be moved to next position using metrics based on cells or blocks. If the window moves every 2 cells and a window has 16 cells, the overlap is 14/16. The sub-sampling technique doesn't enlarge the window size, instead it scales the image before feature extraction and keeps window size the same.
+Since windows are generated based on cells and blocks, windows will be moved to next position using metrics based on cells or blocks. If the window moves every 2 cells and a window has 4 cells, the overlap is 50%. Experiment shows that my model works well when the overlap is 75%.
+
+The sub-sampling technique doesn't enlarge the window size, instead it scales the image before feature extraction and keeps window size the same, which is equivalent to zooming the window.
 
 #### 2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some scanning images showing scanning process:
+I searched on only two scales using YCrCb 3-channel HOG features in the feature vector, which provided decent result.  Here are some images showing scanning process:
 
-Scanning from y 370 to 500 with scaling factor 1.5
+Scanning from y 370 to 500 with scaling factor 1
 
-![scaling 1.5][image3]
+![scaling 1][scale1]
 
-To increase the window size, we increase scaling factor to 2, and scan 400 to 550
+Then scan 400 to 580 with scaling factor of 2
 
-![scaling 2][image4]
+![scaling 2][scale2]
 
-Finally scan 400 to 580 with scaling factor of 2.5
+With the sub-sampling technique, the model will extract features from each window and predict whether the extracted piece of image is a car.
 
-![scaling 2.5][image5]
+Eventually, calling `annotate_cars_in_image(test_image)` will produce an image with a box around cars:
+
+![result][pipeline_result]
+
 
 ---
 
 ### Video Implementation
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
+#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
+
 Here's a [link to my video result](./project_video.mp4)
 
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+#### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+The method `CarSearch.annotate_cars_in_video` does filters and combining boxes.
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+Class `CarSearch` maintains a queue of max size 5~10 for potential car positions. The method searches cars in each frame and draws bounding boxes. It then generates a `heatmap` for these bounding boxes, and puts the `heatmap` in the queue.
 
-### Here are six frames and their corresponding heatmaps:
+When the queue is full, a final `heatmap` will be generated and threshed. `scipy.ndimage.measurements.label` will tell how many separated blobs are there in the `heatmap`. With the assumption that each blob is a car, I reconstruct the boxes to cover the blob, which removes some temporary false positives.
 
-![alt text][image5]
+Here is an example of annotated image and its corresponding heatmap
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
-
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
-
+![heatmap][heatmap1]
+![image with box][heatmap_image1]
 
 
 ---
 
-###Discussion
+### Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+I encountered a problem where the feature vector size was too large to train. That feature vector contained HOG features, spatial bins of (32, 32) size and color maps, length around 20k in total. I then reduced HOG size by increasing the orient parameter, remove color histograms, and reduce spatial bins size to (16,16). It can produce decent result, but color information is still useful and the model can be improved on that.
+
+The scaling factor in sliding window search is tricky. Even if the model has 98% accuracy, if the scaling factor increase to 3, or decrease to 1.5, the model is going to have a lot of false positives. To solve this problem, I need explore more to get a better model and data.

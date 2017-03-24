@@ -1,12 +1,14 @@
 import matplotlib.image as mpimg
-from utils import (extract_features, slide_window, draw_boxes, find_cars)
 import numpy as np
 import cv2
+import collections
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 from sklearn.svm import LinearSVC
 from scipy.ndimage.measurements import label
+from glob import glob
+from utils import (extract_features, slide_window, draw_boxes, find_cars)
 
 import os
 import pickle
@@ -47,7 +49,7 @@ class CarImages(object):
                        np.zeros(len(self.noncar_images))))
         return X, y
 
-color_space = 'RGB'
+color_space = 'YCrCb'
 
 class Model(object):
     """Given Training features and labels, When training, this class will
@@ -72,6 +74,7 @@ class Model(object):
         features = []
         for i in images:
             features.append(extract_features(i, color_space=color_space, hog_channel='ALL'))
+        print("feature length", len(features[0]), "feature shape", features[0].shape)
         return np.array(features).astype(np.float64)
 
     def train(self, X, y, test_size=0.3):
@@ -101,21 +104,22 @@ class Model(object):
 class CarSearch(object):
     def __init__(self, model):
         self.model = model
-        self.heat = np.zeros((720, 1280)) #hardcode for now
-        self.frames = 0
-        self.heat_threshold = 5
+        # record history of heat (a copy)
+        self.history = collections.deque(maxlen=7)
 
-    def __search_cars_in_image(self, img, scale=1.8):
+    def __search_cars_in_image(self, img):
         image_size = img.shape
         box_list = []
         def search(ybeg, yend, scale):
             return find_cars(img, color_space, ybeg, yend, scale,
                              self.model, self.model.scalar,
-                             (32,32), # sptial size and hist_bins
                              show_all=False)
-        box_list += search(370, 500, 1.5)
-        box_list += search(400, 550, 2)
-        box_list += search(400, 580, 2.5)
+        #box_list += search(390, 650, 2.5)
+        #box_list += search(390, 650, 1.8)
+
+        box_list += search(370, 500, 1)
+        box_list += search(400, 580, 2)
+        #box_list += search(400, 580, 2.5)
 
         return box_list
 
@@ -125,23 +129,31 @@ class CarSearch(object):
         return cars
 
     def __add_heat(self, box_list):
+        """add heat to the history"""
+        heat = np.zeros((720, 1280)) #hardcode for now
         for box in box_list:
-            self.heat[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+            heat[box[0][1]:box[1][1], box[0][0]:box[1][0]] += 1
+        self.history.append(heat)
 
-    def thresh_heat(self, threshold):
-        self.heat[self.heat <= threshold] = 0
+    def generate_heat(self):
+        heat = np.sum(np.array(self.history), axis=0)
+        if len(self.history) == self.history.maxlen:
+            # should stay at least 4 frames
+            heat[heat <= 3] = 0
+        return heat
 
     def annotate_cars_in_video(self, img):
         box_list = self.__search_cars_in_image(img)
         self.__add_heat(box_list)
 
-        self.thresh_heat(3)
+        heat = self.generate_heat()
 
-        pixels, ncars = label(self.heat)
+        pixels, ncars = label(heat)
 
         new_boxes = []
         for i in range(1, ncars+1):
             nonzero = (pixels == i).nonzero()
+
             nonzeroy = np.array(nonzero[0])
             nonzerox = np.array(nonzero[1])
 
@@ -149,8 +161,9 @@ class CarSearch(object):
             new_boxes.append(box)
 
         draw_boxes(img, new_boxes, make_copy=False)
-        hot = np.stack((self.heat, self.heat, self.heat), axis=2)
-        return np.hstack((img, hot))
+        # imsave take cmap='hot' to save the heatmap
+        #return np.hstack((img, hot))
+        return img
 
 def training(vehicle_folder, nonvehicle_folder):
     training_data = CarImages(vehicle_folder, nonvehicle_folder)
