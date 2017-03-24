@@ -124,6 +124,8 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
             hist_features = color_hist(subimg, nbins=hist_bins)
 
             # Scale features and make a prediction
+            #print(spatial_features.shape)
+            #print(X_scaler.transform(hist_features.reshape(1,-1)))
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
             test_prediction = model.predict(test_features)
 

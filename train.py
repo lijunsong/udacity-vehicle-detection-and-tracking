@@ -137,7 +137,7 @@ class CarSearch(object):
         box_list = self.__search_cars_in_image(img)
         self.__add_heat(box_list)
 
-        self.thresh_heat(1)
+        self.thresh_heat(3)
 
         pixels, ncars = label(self.heat)
 
@@ -150,8 +150,9 @@ class CarSearch(object):
             box = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
             new_boxes.append(box)
 
-        #draw_boxes(img, new_boxes, make_copy=False)
-        return np.stack((self.heat, self.heat, self.heat), axis=2)
+        draw_boxes(img, new_boxes, make_copy=False)
+        hot = np.stack((self.heat, self.heat, self.heat), axis=2)
+        return np.hstack((img, hot))
 
 def training(vehicle_folder, nonvehicle_folder):
     training_data = CarImages(vehicle_folder, nonvehicle_folder)
