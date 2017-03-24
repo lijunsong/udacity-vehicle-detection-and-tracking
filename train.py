@@ -111,14 +111,12 @@ class CarSearch(object):
         def search(ybeg, yend, scale):
             return find_cars(img, color_space, ybeg, yend, scale,
                              self.model, self.model.scalar,
-                             9, # orient
-                             8, # px per cell
-                             2, # cells per block
                              (32,32), # sptial size and hist_bins
-                             32)
+                             show_all=False)
         box_list += search(370, 500, 1.5)
-        box_list += search(370, 600, 2)
-        #box_list += search(370, 600, 3)
+        box_list += search(400, 550, 2)
+        box_list += search(400, 580, 2.5)
+
         return box_list
 
     def annotate_cars_in_image(self, img):
@@ -165,4 +163,4 @@ def training(vehicle_folder, nonvehicle_folder):
     return model
 
 if __name__ == '__main__':
-    training('small-data/vehicles', 'small-data/non-vehicles')
+    training('large-data/vehicles', 'large-data/non-vehicles')

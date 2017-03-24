@@ -24,9 +24,16 @@ def color_hist(img, nbins=32):
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
 
+orient = 32
+pix_per_cell = 8
+cell_per_block = 2
+hist_bins = 32
+
 # Define a function to return HOG features and visualization
-def get_hog_features(img, orient, pix_per_cell, cell_per_block,
-                        vis=False, feature_vec=True):
+def get_hog_features(img, orient=orient,
+                     pix_per_cell=pix_per_cell,
+                     cell_per_block=cell_per_block,
+                     vis=False, feature_vec=True):
     # Call with two outputs if vis==True
     if vis == True:
         features, hog_image = hog(img, orientations=orient,
@@ -65,8 +72,9 @@ def convert_color(image, color_space='RGB'):
 #
 # NOTE: try to align find_cars parameter and extract_features
 # parameter
+count = 0
 def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
-              orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
+              spatial_size, show_all=False):
 
     #draw_img = np.copy(img)
     img = img.astype(np.float32)/255
@@ -98,10 +106,10 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
     hog2 = get_hog_features(ch2, orient, pix_per_cell, cell_per_block, feature_vec=False)
     hog3 = get_hog_features(ch3, orient, pix_per_cell, cell_per_block, feature_vec=False)
 
-    count = 0
     box_list = []
-    for xb in range(nxsteps):
-        for yb in range(nysteps):
+    global count
+    for xb in range(nxsteps+1):
+        for yb in range(nysteps+1):
             ypos = yb*cells_per_step
             xpos = xb*cells_per_step
             # Extract HOG for this patch
@@ -129,12 +137,14 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
             test_features = X_scaler.transform(np.hstack((spatial_features, hist_features, hog_features)).reshape(1, -1))
             test_prediction = model.predict(test_features)
 
-            if test_prediction == 1:
+            if test_prediction == 1 or show_all:
                 xbox_left = np.int(xleft*scale)
                 ytop_draw = np.int(ytop*scale)
                 win_draw = np.int(window*scale)
                 box = ((xbox_left, ytop_draw+ystart), (xbox_left+win_draw,ytop_draw+win_draw+ystart))
                 box_list.append(box)
+                #mpimg.imsave("output-images/img-{}.jpg".format(count), subimg)
+                #count += 1
                 #cv2.rectangle(draw_img, box[0], box[1],(0,0,255),6)
 
     return box_list
@@ -142,8 +152,7 @@ def find_cars(img, color_space, ystart, ystop, scale, model, X_scaler,
 # extract features from one image
 # Have this function call bin_spatial() and color_hist()
 def extract_features(image, color_space='RGB', spatial_size=(32, 32),
-                     hist_bins=32, orient=9,
-                     pix_per_cell=8, cell_per_block=2, hog_channel='ALL'):
+                     hog_channel='ALL'):
 
     file_features = []
     feature_image = convert_color(image, color_space)
